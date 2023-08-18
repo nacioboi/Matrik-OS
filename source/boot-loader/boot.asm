@@ -35,12 +35,14 @@ ebr_system_id:              db "FAT12   "
 start:
     jmp main
 
-; function: `puts`.
+; routine: `puts`.
 ; -----------------
 ; description:
-;   prints a string to the screen using a system interrupt.
+;   Prints a string to the screen using a system interrupt.
 ; parameters:
-;   - ds:si points to the string which one wants to print.
+;   - ds:si - Points to the string which one wants to print.
+; returns:
+;   - NONE.
 puts:
     push si
     push ax
@@ -59,6 +61,108 @@ puts:
     pop si
     ret
 
+;
+; Disk routines
+;
+
+; routine: dread
+; -------------------
+; description:
+;   Reads sectors from a disk.
+; paramaters:
+;   - ax - LBA address.
+;   - cl - number of sectors to read (up to 126)
+;   - dl - drive num.
+;   - es:bx - memory address where to store the read data.
+; returns:
+; - NONE.
+dread:
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+
+    push cx             ; temp save cl, the number of sectors to read.
+    call lba_to_chs
+    pop ax              ; AL = number of sectors to read
+    mov ah, 02h
+    mov di, 3           ; retry count
+.dread.retry:
+    pusha
+    stc                 ; set carry flag, this is how we check the success... if the carry flag is cleared == done
+    int 13h
+    jnc .dread.done
+
+    ; read failed
+    popa
+    call dreset
+    dec di
+    test di, di
+    jnz .dread.retry
+.dread.fail:
+    ; all retries failed.
+    jmp floppy_error
+.dread.done:
+    popa
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+; routine: lba_to_chs
+; -------------------
+; description:
+;   Converts an LBA address to a CHS address.
+; paramaters:
+;   - dl - disk to reset.
+; returns:
+; - NONE.
+dreset:
+    pusha
+    mov ah, 0
+    stc
+    int 13h
+    popa
+    ret
+
+; routine: lba_to_chs
+; -------------------
+; description:
+;   Converts an LBA address to a CHS address.
+; paramaters:
+;   - ax - LBA adress which one wants to convert.
+; returns:
+; - cx [bits 0-5] - sector number.
+; - cx [bits 6-15] - cylinder.
+; - dh - head
+lba_to_chs:
+    push ax
+    push dx
+
+    xor dx, dx                          ; clear dx
+    div word [bdb_sectors_per_track]    ; ax = LBA / sectors per track
+                                        ; dx = LBA % sectors per track
+
+    inc dx                              ; dx = (LBA % sectors per track + 1) = sector
+    mov cx, dx
+
+    xor dx, dx
+    div word [bdb_heads]                ; ax = (LBA / sectors per track) / heads = cylinder
+                                        ; dx = (LBA . sectors per track) % heads = head
+
+    mov dh, dl                          ; dh = head
+    mov ch, al
+    shl ah, 6
+    or cl, ah                           ; upper 2 bits of cylinder into cl
+
+    pop dx
+    mov dl, al
+    pop ax
+    ret
+
 main:
     ; setup data segments.
     ; we cannot set the stack pointer without using an intermediary register.
@@ -70,15 +174,41 @@ main:
     mov ss, ax
     mov sp, 0x7C00
 
+    ; read something from disk.
+    mov [ebr_drive_number], dl
+    mov ax, 1
+    mov cl, 1
+    mov bx, 0x7E00
+    call dread
+
     ; say hello
     mov si, msg_hello
     call puts
 
+waitkp:
+    pusha
+    mov ah, 0
+    int 16h ; wait for keypress
+    popa
+    ret
+
+reboot:
+    jmp 0FFFFh:0
+
+floppy_error:
+    mov si, floppy_err_msg
+    call puts
+    jmp waitkp
+    jmp reboot
+    hlt
+
 ; stop the computer doing stuff if the os program has ended.
 .halt:
+    cli ; disable inturrupts.
     jmp .halt
 
-msg_hello: db "hello world!", ENDL, 0
+msg_hello:      db "hello world!", ENDL, 0
+floppy_err_msg  db "FLOPPY UNREADABLE", ENDL, 0
 
 ; to declare this as a legacy boot option, the last two bytes of the first sector of the disk must be 0AA55h.
 ; so we must pad the program so that there is our code (above) followed by a series of null bytes until the last two bytes.
