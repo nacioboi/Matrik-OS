@@ -1,90 +1,113 @@
-org 0x7C00 		; Calculate variables and labels with the offset 0x7C00.
-bits 16 		; We want to start out in 16 bit real mode.
+org 0x7C00
+bits 16
 
 %define ENDL 0x0D, 0x0A
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; FAT 12 BPB (BIOS Parameter Block). ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-jmp short main
+
+jmp short start
 nop
 
-bdb_oem: 				db "MSWIN4.1" 		; For maximum compatability, we are not using microsoft here.
-bdb_bytes_per_sector: 		dw 512
-bdb_sectors_per_clustor: 	db 1
-bdb_reserved_sectors: 		dw 1
-bdb_fat_count: 			db 2
-bdb_dir_entries_count: 		dw 0E0h
-bdb_total_sectors: 		dw 2880
-bdb_media_descriptor_type: 	db 0F0h
-bdb_sectors_per_fat: 		dw 9
-bdb_sectors_per_track: 		dw 18
-bdb_heads: 				dw 2
-bdb_hidden_sectors: 		dd 0
-bdb_large_sector_count: 	dd 0
+bdb_oem:				db 'MSWIN4.1'		; 8 Bytes. `MSWIN4.1` is for maximum compatibility.
+bdb_bytes_per_sector:		dw 512
+bdb_sectors_per_cluster:	db 1
+bdb_reserved_sectors:		dw 1
+bdb_fat_count:			db 2
+bdb_dir_entries_count:		dw 0E0h
+bdb_total_sectors:		dw 2880			; 2880 * 512 = 1.44MB.
+bdb_media_descriptor_type:	db 0F0h			; F0 = 3.5" Floppy disk.
+bdb_sectors_per_fat:		dw 9				; 9 Sectors per FAT.
+bdb_sectors_per_track:		dw 18
+bdb_heads:				dw 2
+bdb_hidden_sectors:		dd 0
+bdb_large_sector_count:		dd 0
 
-; Extended boot record.
-ebr_drive_number: 		db 0
- 					db 0
-ebr_signature: 			db 29h
-ebr_volume_id: 			db 00h, 00h, 00h, 00h
-ebr_volume_label: 		db "MATRIK OS  " 		; 11 bytes.
-ebr_system_id: 			db "FAT12   " 		; 8 bytes.
+; Extended boot record
+ebr_drive_number:			db 0				; 0x00 Floppy, 0x80 HDD.
+					db 0				; Reserved.
+ebr_signature:			db 29h
+ebr_volume_id:			db 12h, 34h, 56h, 78h	; Serial number, value doesn't matter.
+ebr_volume_label:			db 'MATRIK   OS'		; 11 Bytes, padded with spaces/
+ebr_system_id:			db 'FAT12   '		; 8 Bytes also padded with spaces.
 
-main:
+
+
+start:
 	; Setup data segments.
-	; We cannot set the stack pointer without using an intermediary register.
-	mov ax, 0
+	mov ax, 0			; can't set ds/es directly
 	mov ds, ax
 	mov es, ax
-
+	
 	; Setup stack.
 	mov ss, ax
-	mov sp, 0x7C00
+	mov sp, 0x7C00		; stack grows downwards from where we are loaded in memory
 
-	; Some BIOSes might start us at 0x7C00:0000 instead of 0x0000:7C00.
+	; Some BIOSes might start us at 07C0:0000 instead of 0000:7C00, make sure we are in the
+	; expected location.
 	push es
-	push word .start
+	push word .after
 	retf
-.start:
-	; Read something from disk.
+.after:
+	; BIOS should set DL to drive number.
 	mov [ebr_drive_number], dl
 
 	; Show loading message.
 	mov si, msg_loading
-	call puts
+	call put_string
 
-	; Compute LBA of the root directory = reserved sectors + (FAT copies * sectors per FAT).
+	; Read drive parameters (sectors per track and head count),
+	; instead of relying on data on formatted disk.
+	push es
+	mov ah, 08h
+	int 13h
+	jc floppy_error
+	pop es
+
+	and cl, 0x3F				; Remove top 2 bits.
+	xor ch, ch
+	mov [bdb_sectors_per_track], cx	; Sector count.
+
+	inc dh
+	mov [bdb_heads], dh			; Head count.
+
+	; Compute LBA of root directory = reserved + fats * sectors_per_fat
+	; note: this section can be hardcoded.
 	mov ax, [bdb_sectors_per_fat]
 	mov bl, [bdb_fat_count]
 	xor bh, bh
-	mul bx
-	add ax, [bdb_reserved_sectors]
+	mul bx					; ax = (fats * sectors_per_fat)
+	add ax, [bdb_reserved_sectors]	; ax = LBA of root directory
 	push ax
 
-	; Compute size of the root directory = (entries * 32) / bytes per sector.
-	mov ax, [bdb_sectors_per_fat]
-	shl ax, 5
-	xor dx, dx
-	div word [bdb_bytes_per_sector]
+	; compute size of root directory = (32 * number_of_entries) / bytes_per_sector
+	mov ax, [bdb_dir_entries_count]
+	shl ax, 5					; ax *= 32
+	xor dx, dx					; dx = 0
+	div word [bdb_bytes_per_sector]	; number of sectors we need to read
 
-	test dx, dx
+	test dx, dx					; if dx != 0, add 1
 	jz .root_dir_after
-	inc ax
+	inc ax					; division remainder != 0, add 1
+							; this means we have a sector only partially filled with entries
 .root_dir_after:
-	; Read the root directory.
-	mov cl, al
-	pop ax
-	mov dl, [ebr_drive_number]
-	mov bx, buffer
-	call dread
+	; read root directory
+	mov cl, al					; cl = number of sectors to read = size of root directory
+	pop ax					; ax = LBA of root directory
+	mov dl, [ebr_drive_number]		; dl = drive number (we saved it previously)
+	mov bx, buffer				; es:bx = buffer
+	call disk_read
 
-	; search for kernel.
+	; search for kernel.bin
 	xor bx, bx
 	mov di, buffer
-.search_kernel:
-	mov si, file_kernel_name
-	mov cx, 11
+
+	.search_kernel:
+	mov si, file_kernel_bin
+	mov cx, 11					; compare up to 11 characters
 	push di
 	repe cmpsb
 	pop di
@@ -95,278 +118,274 @@ main:
 	cmp bx, [bdb_dir_entries_count]
 	jl .search_kernel
 
-	mov si, msg_err_kernel_not_found
-	jmp perror
+	; kernel not found
+	jmp kernel_not_found_error
 .found_kernel:
-	; Save first cluster of kernel.
-	mov ax, [di + 26]
+	; di should have the address to the entry
+	mov ax, [di + 26]				; first logical cluster field (offset 26)
 	mov [kernel_cluster], ax
 
-	; Load FAT from disk.
+	; load FAT from disk into memory
 	mov ax, [bdb_reserved_sectors]
 	mov bx, buffer
 	mov cl, [bdb_sectors_per_fat]
 	mov dl, [ebr_drive_number]
-	call dread
+	call disk_read
 
-	; Read kernel from disk.
+	; read kernel and process FAT chain
 	mov bx, KERNEL_LOAD_SEGMENT
 	mov es, bx
 	mov bx, KERNEL_LOAD_OFFSET
-
-.kernel_load_loop:
-	; Read next cluster.
+.load_kernel_loop:
+	; Read next cluster
 	mov ax, [kernel_cluster]
-	mov cx, 31
-
+	
+	; not nice :( hardcoded value
+	add ax, 31					; first cluster = (kernel_cluster - 2) * sectors_per_cluster + start_sector
+							; start sector = reserved + fats + root directory size = 1 + 18 + 134 = 33
 	mov cl, 1
 	mov dl, [ebr_drive_number]
-	call dread
+	call disk_read
 
 	add bx, [bdb_bytes_per_sector]
 
-	; Compute the location of the next cluster.
+	; compute location of next cluster
 	mov ax, [kernel_cluster]
 	mov cx, 3
 	mul cx
 	mov cx, 2
-	div cx
+	div cx					; ax = index of entry in FAT, dx = cluster mod 2
 
 	mov si, buffer
 	add si, ax
-	mov ax, [ds:si]
+	mov ax, [ds:si]				; read entry from FAT table at index ax
 
 	or dx, dx
 	jz .even
 .odd:
 	shr ax, 4
-	jmp .next_cluster
+	jmp .next_cluster_after
 .even:
-	and ax, 0FFFh
-.next_cluster:
-	cmp ax, 0FF8h
-	jae .read_finished
+	and ax, 0x0FFF
+.next_cluster_after:
+	cmp ax, 0x0FF8				; end of chain
+	jae .read_finish
 
 	mov [kernel_cluster], ax
-	jmp .kernel_load_loop
+	jmp .load_kernel_loop
+.read_finish:
+	; jump to our kernel
+	mov dl, [ebr_drive_number]		; boot device in dl
 
-.read_finished:
-	mov dl, [ebr_drive_number]
-	mov ax, KERNEL_LOAD_SEGMENT
+	mov ax, KERNEL_LOAD_SEGMENT		; set segment registers
 	mov ds, ax
 	mov es, ax
 
 	jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
 
-	jmp waitkp
+	jmp wait_key_and_reboot			; should never happen
 
-	cli
+	cli						; disable interrupts, this way CPU can't get out of "halt" state
 	hlt
-;;;;;;;;;;;;;;;;;
-; Disk routines ;
-;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; routine: dread. 									;
-; ----------------------------------------------------------------------;
-; description: 										;
-;   Reads sectors from a disk. 							;
-; paramaters: 										;
-;   - ax - LBA address. 								;
-;   - cl - number of sectors to read (up to 126). 				;
-;   - dl - drive num. 									;
-;   - es:bx - memory address where to store the read data. 			;
-; returns: 											;
-; - NONE. 											;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-dread:
-	push ax
-	push bx
-	push cx
-	push dx
-	push di
 
-	push cx             ; temp save cl, the number of sectors to read.
-	call lba_to_chs
-	pop ax              ; AL = number of sectors to read
-	mov ah, 02h
-	mov di, 3           ; retry count
-.dread.retry:
-	pusha
-	stc                 ; set carry flag, this is how we check the success... if the carry flag is cleared == done
-	int 13h
-	jnc .dread.done
 
-	; read failed
-	popa
-	call dreset
-	dec di
-	test di, di
-	jnz .dread.retry
-.dread.fail:
-	; all retries failed.
-	mov si, msg_err_floppy_unreadable_device
-	jmp perror
-.dread.done:
-	popa
-	pop di
-	pop dx
-	pop cx
-	pop bx
-	pop ax
-	ret
+;;;;;;;;;;;;;;;;;;
+; Error handlers ;
+;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; routine: lba_to_chs 									;
-; ----------------------------------------------------------------------;
-; description: 										;
-;   Converts an LBA address to a CHS address. 					;
-; paramaters: 										;
-;   - dl - disk to reset. 								;
-; returns: 											;
-; - NONE. 											;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-dreset:
-	pusha
-	mov ah, 0
-	stc
-	int 13h
-	popa
-	ret
+floppy_error:
+	mov si, msg_read_failed
+	call put_string
+	jmp wait_key_and_reboot
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; routine: lba_to_chs 									;
-; ----------------------------------------------------------------------;
-; description: 										;
-;   Converts an LBA address to a CHS address. 					;
-; paramaters: 										;
-;   - ax - LBA adress which one wants to convert. 				;
-; returns: 											;
-; - cx [bits 0-5] - sector number.							;
-; - cx [bits 6-15] - cylinder.							;
-; - dh - head.										;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-lba_to_chs:
-	push ax
-	push dx
+kernel_not_found_error:
+	mov si, msg_kernel_not_found
+	call put_string
+	jmp wait_key_and_reboot
 
-	xor dx, dx                          ; clear dx
-	div word [bdb_sectors_per_track]    ; ax = LBA / sectors per track
-							; dx = LBA % sectors per track
 
-	inc dx                              ; dx = (LBA % sectors per track + 1) = sector
-	mov cx, dx
 
-	xor dx, dx
-	div word [bdb_heads]                ; ax = (LBA / sectors per track) / heads = cylinder
-							; dx = (LBA . sectors per track) % heads = head
 
-	mov dh, dl                          ; dh = head
-	mov ch, al
-	shl ah, 6
-	or cl, ah                           ; upper 2 bits of cylinder into cl
-
-	pop dx
-	mov dl, al
-	pop ax
-	ret
 
 ;;;;;;;;;;;;;;;;;;
 ; Other routines ;
 ;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Routine: `waitkp`. 									;
-; ----------------------------------------------------------------------;
-; Description: 										;
-; 	Waits for a keypress. 								;
-; parameters: 										;
-; 	- NONE. 										;
-; returns: 											;
-; 	- NONE. 										;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-waitkp:
-	pusha
+wait_key_and_reboot:
 	mov ah, 0
-	int 16h ; wait for keypress
-	popa
-	ret
+	int 16h					; wait for keypress
+	jmp 0FFFFh:0				; jump to beginning of BIOS, should reboot
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Routine: `perror`. 									;
-; ----------------------------------------------------------------------;
-; Description: 										;
-; 	Prints an error message to the screen, waits for a keypress, 	;
-; 	and then finally reboots the computer. 					;
-; parameters: 										;
-; 	- ds:si - Points to the error message which one wants to print. 	;
-; returns: 											;
-; 	- NONE. 										;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-perror:
-	call puts
-	jmp waitkp
-	jmp 0FFFFh:0
-	hlt 			; just in case the jump fails.
+.halt:
+	cli						; disable interrupts, this way CPU can't get out of "halt" state
+	hlt
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Routine: `puts`. 								;
+; * `put_string`. 								;
 ; ----------------------------------------------------------------;
 ; Description: 									;
-; 	Prints a string to the screen using a system interrupt. 	;
-; parameters: 									;
-; 	- ds:si - Points to the string which one wants to print. 	;
-; returns: 										;
-; 	- NONE. 									;
+; 	* Prints a string to the screen using a system interrupt. 	;
+; Parameters: 									;
+; 	* ES:SI 		* Points to the string which one wants 	;
+; 				* 	to print.					;
+; Returns: 										;
+; 	* NONE. 									;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-puts:
+put_string:
+	; save registers we will modify
 	push si
 	push ax
-.puts.loopy:
-	lodsb 		; loads next character into al.
-	or al, al 		; check if next character is null. if yes, the zero flag will be set.
-	jz .puts.done
+	push bx
+.loop:
+	lodsb				; loads next character in al
+	or al, al			; verify if next character is null?
+	jz .done
 
-	mov ah, 0x0E 	; this is the sub-category for the interupt.
-	mov bh, 0
+	mov ah, 0x0E		; call bios interrupt
+	mov bh, 0			; set page number to 0
 	int 0x10
 
-	jmp .puts.loopy
-.puts.done:
+	jmp .loop
+.done:
+	pop bx
 	pop ax
 	pop si
 	ret
 
+
+
+;;;;;;;;;;;;;;;;;
+; Disk routines ;
+;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; * `disk_lba_to_chs` 									;
+; ----------------------------------------------------------------------;
+; Description: 										;
+; 	* Converts an LBA address to a CHS address. 				;
+; Paramaters: 										;
+; 	* AX 			* LBA adress which one wants to convert. 		;
+; Returns: 											;
+; 	* CX [bits 0-5] 	* sector number. 						;
+; 	* CX [bits 6-15] 	* cylinder. 						;
+; 	* DH 			* head. 							;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+disk_lba_to_chs:
+	push ax
+	push dx
+
+	xor dx, dx						; dx = 0
+	div word [bdb_sectors_per_track]		; ax = LBA / SectorsPerTrack
+								; dx = LBA % SectorsPerTrack
+
+	inc dx						; dx = (LBA % SectorsPerTrack + 1) = sector
+	mov cx, dx						; cx = sector
+
+	xor dx, dx						; dx = 0
+	div word [bdb_heads]				; ax = (LBA / SectorsPerTrack) / Heads = cylinder
+								; dx = (LBA / SectorsPerTrack) % Heads = head
+	mov dh, dl						; dh = head
+	mov ch, al						; ch = cylinder (lower 8 bits)
+	shl ah, 6
+	or cl, ah						; put upper 2 bits of cylinder in CL
+
+	pop ax
+	mov dl, al						; restore DL
+	pop ax
+	ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; * `disk_read.` 										;
+; ----------------------------------------------------------------------;
+; Description: 										;
+; 	* Reads sectors from a disk. 							;
+; Paramaters: 										;
+; 	* AX 		* LBA address. 							;
+; 	* CL 		* number of sectors to read (up to 126). 			;
+; 	* DL 		* drive num. 							;
+; 	* ES:BX 	* memory address where to store the read data. 		;
+; Returns: 											;
+; 	* NONE. 										;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+disk_read:
+	push ax					; save registers we will modify
+	push bx
+	push cx
+	push dx
+	push di
+
+	push cx					; temporarily save CL (number of sectors to read)
+	call disk_lba_to_chs			; compute CHS
+	pop ax					; AL = number of sectors to read
+	
+	mov ah, 02h
+	mov di, 3					; retry count
+.retry:
+	pusha						; save all registers, we don't know what bios modifies
+	stc						; set carry flag, some BIOS'es don't set it
+	int 13h					; carry flag cleared = success
+	jnc .done					; jump if carry not set
+
+	; read failed
+	popa
+	call disk_reset
+
+	dec di
+	test di, di
+	jnz .retry
+.fail:
+	; all attempts are exhausted
+	jmp floppy_error
+.done:
+	popa
+
+	pop di
+	pop dx
+	pop cx
+	pop bx
+	pop ax					; restore registers modified
+	ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; * `disk_reset` 										;
+; ----------------------------------------------------------------------;
+; Description: 										;
+; 	* Converts an LBA address to a CHS address. 				;
+; Paramaters: 										;
+; 	* DL 		* disk to reset. 							;
+; Returns: 											;
+; 	* NONE. 										;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+disk_reset:
+	pusha
+	mov ah, 0
+	stc
+	int 13h
+	jc floppy_error
+	popa
+	ret
+
+
+
 ;;;;;;;;;;;
 ; Memory. ;
 ;;;;;;;;;;;
-prefix_msg_err: 				db "ERR="
 
-msg_loading: 				db "Loading...", ENDL, 0
-file_kernel_name: 			db "KERNEL   BIN"
-kernel_cluster: 				dw 0
-buffer:	
-KERNEL_LOAD_SEGMENT: 			equ 0x2000
-KERNEL_LOAD_OFFSET: 			equ 0
+msg_loading:			db 'Loading...', ENDL, 0
+msg_read_failed:			db 'Read from disk failed!', ENDL, 0
+msg_kernel_not_found:		db 'KERNEL.BIN file not found!', ENDL, 0
+file_kernel_bin:			db 'KERNEL  BIN'
+kernel_cluster:			dw 0
 
-; Error strings.
-msg_err_floppy_unreadable_device: 	db prefix_msg_err, "1", ENDL, 0
-msg_err_kernel_not_found: 		db prefix_msg_err, "2", ENDL, 0
+KERNEL_LOAD_SEGMENT		equ 0x2000
+KERNEL_LOAD_OFFSET		equ 0
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Shit we don't care about ;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; stop the computer doing stuff if the os program has ended.
-.halt:
-	cli ; disable inturrupts.
-	jmp .halt
 
-;;;;;;;;;;;;;;;;;;;;;
-; This we do though ;
-;;;;;;;;;;;;;;;;;;;;;
-
-; to declare this as a legacy boot option, the last two bytes of the first sector of the disk must be 0AA55h.
-; so we must pad the program so that there is our code (above) followed by a series of null bytes until the last two bytes.
 times 510-($-$$) db 0
 dw 0AA55h
+
+
+
+buffer:

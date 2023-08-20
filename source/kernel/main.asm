@@ -9,6 +9,8 @@ main:
 	mov si, msg_hello
 	call puts
 
+	jmp halt
+
 ; function: `puts`.
 ; -----------------
 ; description:
@@ -34,7 +36,7 @@ puts:
 	ret
 
 ; stop the computer doing stuff if the os program has ended.
-.halt:
-	jmp .halt
+halt:
+	jmp halt
 
 msg_hello: db "hello world!", ENDL, 0
