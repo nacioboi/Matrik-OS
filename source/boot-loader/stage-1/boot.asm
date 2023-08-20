@@ -6,10 +6,10 @@ bits 16 		; We want to start out in 16 bit real mode.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; FAT 12 BPB (BIOS Parameter Block). ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-jmp short start
+jmp short main
 nop
 
-bdb_oem: 				db "MSWIN4.1" 	; For maximum compatability, we are not using microsoft here.
+bdb_oem: 				db "MSWIN4.1" 		; For maximum compatability, we are not using microsoft here.
 bdb_bytes_per_sector: 		dw 512
 bdb_sectors_per_clustor: 	db 1
 bdb_reserved_sectors: 		dw 1
@@ -31,9 +31,137 @@ ebr_volume_id: 			db 00h, 00h, 00h, 00h
 ebr_volume_label: 		db "MATRIK OS  " 		; 11 bytes.
 ebr_system_id: 			db "FAT12   " 		; 8 bytes.
 
-start:
-	jmp main
+main:
+	; Setup data segments.
+	; We cannot set the stack pointer without using an intermediary register.
+	mov ax, 0
+	mov ds, ax
+	mov es, ax
 
+	; Setup stack.
+	mov ss, ax
+	mov sp, 0x7C00
+
+	; Some BIOSes might start us at 0x7C00:0000 instead of 0x0000:7C00.
+	push es
+	push word .start
+	retf
+.start:
+	; Read something from disk.
+	mov [ebr_drive_number], dl
+
+	; Show loading message.
+	mov si, msg_loading
+	call puts
+
+	; Compute LBA of the root directory = reserved sectors + (FAT copies * sectors per FAT).
+	mov ax, [bdb_sectors_per_fat]
+	mov bl, [bdb_fat_count]
+	xor bh, bh
+	mul bx
+	add ax, [bdb_reserved_sectors]
+	push ax
+
+	; Compute size of the root directory = (entries * 32) / bytes per sector.
+	mov ax, [bdb_sectors_per_fat]
+	shl ax, 5
+	xor dx, dx
+	div word [bdb_bytes_per_sector]
+
+	test dx, dx
+	jz .root_dir_after
+	inc ax
+.root_dir_after:
+	; Read the root directory.
+	mov cl, al
+	pop ax
+	mov dl, [ebr_drive_number]
+	mov bx, buffer
+	call dread
+
+	; search for kernel.
+	xor bx, bx
+	mov di, buffer
+.search_kernel:
+	mov si, file_kernel_name
+	mov cx, 11
+	push di
+	repe cmpsb
+	pop di
+	je .found_kernel
+
+	add di, 32
+	inc bx
+	cmp bx, [bdb_dir_entries_count]
+	jl .search_kernel
+
+	mov si, msg_err_kernel_not_found
+	jmp perror
+.found_kernel:
+	; Save first cluster of kernel.
+	mov ax, [di + 26]
+	mov [kernel_cluster], ax
+
+	; Load FAT from disk.
+	mov ax, [bdb_reserved_sectors]
+	mov bx, buffer
+	mov cl, [bdb_sectors_per_fat]
+	mov dl, [ebr_drive_number]
+	call dread
+
+	; Read kernel from disk.
+	mov bx, KERNEL_LOAD_SEGMENT
+	mov es, bx
+	mov bx, KERNEL_LOAD_OFFSET
+
+.kernel_load_loop:
+	; Read next cluster.
+	mov ax, [kernel_cluster]
+	mov cx, 31
+
+	mov cl, 1
+	mov dl, [ebr_drive_number]
+	call dread
+
+	add bx, [bdb_bytes_per_sector]
+
+	; Compute the location of the next cluster.
+	mov ax, [kernel_cluster]
+	mov cx, 3
+	mul cx
+	mov cx, 2
+	div cx
+
+	mov si, buffer
+	add si, ax
+	mov ax, [ds:si]
+
+	or dx, dx
+	jz .even
+.odd:
+	shr ax, 4
+	jmp .next_cluster
+.even:
+	and ax, 0FFFh
+.next_cluster:
+	cmp ax, 0FF8h
+	jae .read_finished
+
+	mov [kernel_cluster], ax
+	jmp .kernel_load_loop
+
+.read_finished:
+	mov dl, [ebr_drive_number]
+	mov ax, KERNEL_LOAD_SEGMENT
+	mov ds, ax
+	mov es, ax
+
+	jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+
+	jmp waitkp
+
+	cli
+	hlt
 ;;;;;;;;;;;;;;;;;
 ; Disk routines ;
 ;;;;;;;;;;;;;;;;;
@@ -88,14 +216,16 @@ dread:
 	pop ax
 	ret
 
-; routine: lba_to_chs
-; -------------------
-; description:
-;   Converts an LBA address to a CHS address.
-; paramaters:
-;   - dl - disk to reset.
-; returns:
-; - NONE.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; routine: lba_to_chs 									;
+; ----------------------------------------------------------------------;
+; description: 										;
+;   Converts an LBA address to a CHS address. 					;
+; paramaters: 										;
+;   - dl - disk to reset. 								;
+; returns: 											;
+; - NONE. 											;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 dreset:
 	pusha
 	mov ah, 0
@@ -104,16 +234,18 @@ dreset:
 	popa
 	ret
 
-; routine: lba_to_chs
-; -------------------
-; description:
-;   Converts an LBA address to a CHS address.
-; paramaters:
-;   - ax - LBA adress which one wants to convert.
-; returns:
-; - cx [bits 0-5] - sector number.
-; - cx [bits 6-15] - cylinder.
-; - dh - head
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; routine: lba_to_chs 									;
+; ----------------------------------------------------------------------;
+; description: 										;
+;   Converts an LBA address to a CHS address. 					;
+; paramaters: 										;
+;   - ax - LBA adress which one wants to convert. 				;
+; returns: 											;
+; - cx [bits 0-5] - sector number.							;
+; - cx [bits 6-15] - cylinder.							;
+; - dh - head.										;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 lba_to_chs:
 	push ax
 	push dx
@@ -139,27 +271,9 @@ lba_to_chs:
 	pop ax
 	ret
 
-main:
-	; setup data segments.
-	; we cannot set the stack pointer without using an intermediary register.
-	mov ax, 0
-	mov ds, ax
-	mov es, ax
-
-	; setup stack.
-	mov ss, ax
-	mov sp, 0x7C00
-
-	; read something from disk.
-	mov [ebr_drive_number], dl
-	mov ax, 1
-	mov cl, 1
-	mov bx, 0x7E00
-	call dread
-
-	; say hello
-	mov si, msg_hello
-	call puts
+;;;;;;;;;;;;;;;;;;
+; Other routines ;
+;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Routine: `waitkp`. 									;
@@ -223,16 +337,21 @@ puts:
 	pop si
 	ret
 
-;;;;;;;;;;;;;
-; Messages. ;
-;;;;;;;;;;;;;
-prefix_msg_err_floppy: 			db "B_ERR="
+;;;;;;;;;;;
+; Memory. ;
+;;;;;;;;;;;
+prefix_msg_err: 				db "ERR="
 
-; OK strings.
-msg_loading: 				db "Loading", ENDL, 0
+msg_loading: 				db "Loading...", ENDL, 0
+file_kernel_name: 			db "KERNEL   BIN"
+kernel_cluster: 				dw 0
+buffer:	
+KERNEL_LOAD_SEGMENT: 			equ 0x2000
+KERNEL_LOAD_OFFSET: 			equ 0
 
 ; Error strings.
-msg_err_floppy_unreadable_device: 	db prefix_msg_err_floppy, "1", ENDL, 0
+msg_err_floppy_unreadable_device: 	db prefix_msg_err, "1", ENDL, 0
+msg_err_kernel_not_found: 		db prefix_msg_err, "2", ENDL, 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Shit we don't care about ;
