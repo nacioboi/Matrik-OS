@@ -1,7 +1,6 @@
 ASM=nasm
 CC=gcc -Wall
-CC16=/usr/bin/watcom/binl/wcc
-LD16=/usr/bin/watcom/binl/wlink
+MAKE=make
 
 SRC_DIR=source
 BUILD_DIR=built
@@ -17,24 +16,29 @@ floppy_image: $(BUILD_DIR)/main_floppy.img
 $(BUILD_DIR)/main_floppy.img: boot-loader kernel
 	dd if=/dev/zero of=$(BUILD_DIR)/main_floppy.img bs=512 count=2880
 	mkfs.fat -F 12 -n "MATRIK_OS" $(BUILD_DIR)/main_floppy.img
-	dd if=$(BUILD_DIR)/boot-loader.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
+	dd if=$(BUILD_DIR)/stage-1.boot.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
+	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/stage-2.boot.bin "::stage-2.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/kernel.bin "::kernel.bin"
-	mcopy -i $(BUILD_DIR)/main_floppy.img test.txt "::test.txt"
 
 #
 # boot-loader
 #
-boot-loader: $(BUILD_DIR)/boot-loader.bin
-$(BUILD_DIR)/boot-loader.bin: always
-	$(ASM) $(SRC_DIR)/boot-loader/stage-1/boot.asm -f bin -o ${BUILD_DIR}/boot-loader.bin
+boot-loader: stage-1 stage-2
+
+stage-1: $(BUILD_DIR)/stage-1.boot.bin
+$(BUILD_DIR)/stage-1.boot.bin: always
+	$(MAKE) -C $(SRC_DIR)/boot-loader/stage-1 BUILD_DIR=$(abspath $(BUILD_DIR))
+
+stage-2: $(BUILD_DIR)/stage-2.boot.bin
+$(BUILD_DIR)/stage-2.boot.bin: always
+	$(MAKE) -C $(SRC_DIR)/boot-loader/stage-2 BUILD_DIR=$(abspath $(BUILD_DIR))
 
 #
 # kernel
 #
 kernel: $(BUILD_DIR)/kernel.bin
 $(BUILD_DIR)/kernel.bin: always
-	$(ASM) $(SRC_DIR)/kernel/main.asm -f bin -o ${BUILD_DIR}/kernel.bin
-
+	$(MAKE) -C $(SRC_DIR)/kernel BUILD_DIR=$(abspath $(BUILD_DIR))
 #
 # tools_fat
 #
