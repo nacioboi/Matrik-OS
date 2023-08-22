@@ -46,7 +46,7 @@ start:
 	mov ss, ax
 	mov sp, 0x7C00		; stack grows downwards from where we are loaded in memory
 
-	; Some BIOSes might start us at 07C0:0000 instead of 0000:7C00, make sure we are in the
+	; Some BIOSes might start us at 7C00:0000 instead of 0000:7C00, make sure we are in the
 	; expected location.
 	push es
 	push word .after
@@ -185,8 +185,7 @@ start:
 
 	jmp wait_key_and_reboot			; should never happen
 
-	cli						; disable interrupts, this way CPU can't get out of "halt" state
-	hlt
+	call .halt
 
 
 
@@ -220,6 +219,7 @@ wait_key_and_reboot:
 .halt:
 	cli						; disable interrupts, this way CPU can't get out of "halt" state
 	hlt
+	jmp .halt
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; * `put_string`. 								;
