@@ -1,7 +1,7 @@
 BUILD_DIR?=build/
 ASM?=nasm
-CC16?=/usr/bin/watcom/binl/wcc
-LD16?=/usr/bin/watcom/binl/wlink
+CC16?=/workspaces/Matrik-OS/tool-chain/watcom/binl/wcc
+LD16?=/workspaces/Matrik-OS/tool-chain/watcom/binl/wlink
 CFLAGS16?=-4 -d3 -s -wx -ms -zl -zq
 ASMFLAGS?=-f obj
 

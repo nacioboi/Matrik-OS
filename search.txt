@@ -1,0 +1,266 @@
+Sorting...
+Full Text Search...
+a2jmidid/stable 9-3 amd64
+  Daemon for exposing legacy ALSA MIDI in JACK MIDI systems
+
+aconnectgui/stable 0.9.0rc2-1-10.1 amd64
+  graphical ALSA sequencer connection manager
+
+alsa-oss/stable 1.1.8-2 amd64
+  ALSA wrapper for OSS applications
+
+alsa-tools/stable 1.2.5-3 amd64
+  Console based ALSA utilities for specific hardware
+
+alsa-tools-gui/stable 1.2.5-3 amd64
+  GUI based ALSA utilities for specific hardware
+
+alsa-topology-conf/stable,now 1.2.5.1-2 all [installed,automatic]
+  ALSA topology configuration files
+
+alsa-ucm-conf/stable,now 1.2.8-1 all [installed,automatic]
+  ALSA Use Case Manager configuration files
+
+alsa-utils/stable,now 1.2.8-1 amd64 [installed]
+  Utilities for configuring and using ALSA
+
+alsamixergui/stable 0.9.0rc2-1-10.1+b1 amd64
+  graphical soundcard mixer for ALSA soundcard driver
+
+alsaplayer-alsa/stable 0.99.81-2+b3 amd64
+  alsaplayer output module for ALSA
+
+alsaplayer-common/stable 0.99.81-2+b3 amd64
+  audio player (common files)
+
+alsaplayer-daemon/stable 0.99.81-2+b3 amd64
+  alsaplayer daemon
+
+alsaplayer-gtk/stable 0.99.81-2+b3 amd64
+  alsaplayer gtk interface
+
+alsaplayer-jack/stable 0.99.81-2+b3 amd64
+  alsaplayer output module for JACK
+
+alsaplayer-nas/stable 0.99.81-2+b3 amd64
+  alsaplayer output module for NAS
+
+alsaplayer-oss/stable 0.99.81-2+b3 amd64
+  alsaplayer output module for OSS
+
+alsaplayer-text/stable 0.99.81-2+b3 amd64
+  alsaplayer text interface
+
+alsaplayer-xosd/stable 0.99.81-2+b3 amd64
+  alsaplayer XOSD display module
+
+ams/stable 2.2.0-1 amd64
+  Realtime modular synthesizer for ALSA
+
+apulse/stable 0.1.13-2 amd64
+  PulseAudio emulation for ALSA
+
+aseqjoy/stable 0.0.2-1+b1 amd64
+  Joystick to ALSA MIDI Sequencer Converter
+
+balsa/stable 2.6.4-2 amd64
+  e-mail client for GNOME
+
+balsa-data/stable 2.6.4-2 all
+  e-mail client for GNOME -- data files
+
+bluez-alsa-utils/stable 4.0.0-2 amd64
+  Bluetooth Audio ALSA Backend (utils)
+
+cairo-dock-alsamixer-plug-in/stable 3.4.1+git20201022.a0d3415c-1+b1 amd64
+  Alsamixer plug-in for Cairo-dock
+
+cava/stable 0.7.4-1 amd64
+  Console-based Audio Visualizer for Alsa
+
+drumstick-data/stable 2.7.2-1 all
+  Qt5/C++ wrapper for ALSA Sequencer (data files)
+
+drumstick-tools/stable 2.7.2-1 amd64
+  Qt5/C++ wrapper for ALSA Sequencer (utilities)
+
+gstreamer1.0-alsa/stable,stable-security 1.22.0-3+deb12u1 amd64
+  GStreamer plugin for ALSA
+
+japa/stable 0.9.4-1 amd64
+  JACK and ALSA Perceptual Analyser
+
+kmetronome/stable 1.3.1-1 amd64
+  ALSA MIDI Metronome
+
+ld10k1/stable 1.2.5-3 amd64
+  ALSA emu10k1/2 patch loader
+
+libalsa-ocaml/stable 0.3.0-1+b2 amd64
+  OCaml bindings for the ALSA library
+
+libalsa-ocaml-dev/stable 0.3.0-1+b2 amd64
+  OCaml bindings for the ALSA library
+
+libalsaplayer-dev/stable 0.99.81-2+b3 amd64
+  alsaplayer plugin library (development files)
+
+libalsaplayer0/stable 0.99.81-2+b3 amd64
+  alsaplayer plugin library
+
+libasound2/stable,now 1.2.8-1+b1 amd64 [installed]
+  shared library for ALSA applications
+
+libasound2-data/stable,now 1.2.8-1 all [installed,automatic]
+  Configuration files and profiles for ALSA drivers
+
+libasound2-dev/stable 1.2.8-1+b1 amd64
+  shared library for ALSA applications -- development files
+
+libasound2-doc/stable 1.2.8-1 all
+  documentation for user-space ALSA application programming
+
+libasound2-plugin-bluez/stable 4.0.0-2 amd64
+  Bluetooth Audio ALSA Backend (plugins)
+
+libasound2-plugin-equal/stable 0.6-8 amd64
+  equalizer plugin for ALSA
+
+libasound2-plugin-smixer/stable 1.2.8-1+b1 amd64
+  smixer plugin for ALSA library
+
+libasound2-plugins/stable 1.2.7.1-1 amd64
+  ALSA library additional plugins
+
+libatopology-dev/stable 1.2.8-1+b1 amd64
+  shared library for handling ALSA topology -- development files
+
+libatopology2/stable,now 1.2.8-1+b1 amd64 [installed,automatic]
+  shared library for handling ALSA topology definitions
+
+libclalsadrv-dev/stable 2.0.0-3.1 all
+  ALSA driver C++ access library (development files)
+
+libclalsadrv2/stable 2.0.0-3.1 amd64
+  ALSA driver C++ access library
+
+libdrumstick-alsa2/stable 2.7.2-1 amd64
+  Qt5/C++ wrapper for ALSA Sequencer (shared library)
+
+libdrumstick-dev/stable 2.7.2-1 amd64
+  Qt5/C++ wrapper for ALSA Sequencer (development files)
+
+libdrumstick-widgets2/stable 2.7.2-1 amd64
+  Qt5/C++ wrapper for ALSA Sequencer (widgets)
+
+libdssialsacompat-dev/stable 1.0.8a-1+b2 amd64
+  DSSI ALSA compatibility library (development files)
+
+libdssialsacompat0/stable 1.0.8a-1+b2 amd64
+  DSSI ALSA compatibility library for non-Linux platforms
+
+libghc-alsa-core-dev/stable 0.5.0.1-7+b2 amd64
+  binding to the ALSA Library API (Exceptions)
+
+libghc-alsa-core-doc/stable 0.5.0.1-7 all
+  binding to the ALSA Library API (Exceptions); documentation
+
+libghc-alsa-core-prof/stable 0.5.0.1-7+b2 amd64
+  binding to the ALSA Library API (Exceptions); profiling libraries
+
+libghc-alsa-mixer-dev/stable 0.3.0-3+b2 amd64
+  bindings to the ALSA simple mixer API
+
+libghc-alsa-mixer-doc/stable 0.3.0-3 all
+  bindings to the ALSA simple mixer API; documentation
+
+libghc-alsa-mixer-prof/stable 0.3.0-3+b2 amd64
+  bindings to the ALSA simple mixer API; profiling libraries
+
+liblo10k1-0/stable 1.2.5-3 amd64
+  ALSA emu10k1/2 patch-loader library
+
+liblo10k1-dev/stable 1.2.5-3 amd64
+  ALSA emu10k1/2 patch-loader library development files
+
+libomxil-bellagio0-components-alsa/stable 0.1-3 amd64
+  ALSA source/sink components for Bellagio OpenMAX IL
+
+librust-alsa-sys-dev/stable 0.2.0-2 amd64
+  FFI bindings for the ALSA project (Advanced Linux Sound Architecture) - Rust source code
+
+libsnack-alsa/stable 2.2.10.20090624+dfsg-1 amd64
+  Sound extension to Tcl/Tk and Python/Tkinter - ALSA files
+
+libsox-fmt-alsa/stable 14.4.2+git20190427-3.5 amd64
+  SoX alsa format I/O library
+
+libzita-alsa-pcmi-dev/stable 0.6.1-1 amd64
+  Development files (headers) for libzita-alsa-pcmi library
+
+libzita-alsa-pcmi0/stable 0.6.1-1 amd64
+  C++ wrapper around the ALSA API
+
+mcp-plugins/stable 0.4.0-6 amd64
+  LADSPA plugins designed for Alsa Modular Synth
+
+mkchromecast-alsa/stable 0.3.9~git20200902+db2964a-2 all
+  ALSA dependencies to cast with mkchromecast
+
+mopidy-alsamixer/stable 2.0.1-1 all
+  Mopidy extension for volume control via ALSA
+
+mudita24/stable 1.0.3+svn13-7 amd64
+  ALSA GUI control tool for Envy24 (ice1712) soundcards
+
+multimedia-jack/stable 0.10 all
+  JACK (Jack Audio Connection Kit) and ALSA related packages
+
+osspd-alsa/stable 1.3.2-13.1 amd64
+  OSS Proxy Daemon: ALSA backend (experimental)
+
+pipewire-alsa/stable 0.3.65-3 amd64
+  PipeWire ALSA plugin
+
+pipewire-audio-client-libraries/stable 0.3.65-3 all
+  transitional package for pipewire-alsa and pipewire-jack
+
+pipewire-media-session-alsa/stable 0.4.2-3 all
+  example session manager for PipeWire (alsa)
+
+pmidi/stable 1.7.1-1+b1 amd64
+  command line midi player for ALSA
+
+python3-alsaaudio/stable 0.8.4-1.1+b7 amd64
+  Alsa bindings for Python 3
+
+python3-pyalsa/stable 1.2.7-1+b3 amd64
+  Official ALSA Python binding library for Python3
+
+qasconfig/stable 0.23.0-1 amd64
+  ALSA configuration browser
+
+qashctl/stable 0.23.0-1 amd64
+  mixer for ALSA's High level Control Interface
+
+qasmixer/stable 0.23.0-1 amd64
+  ALSA mixer for the desktop
+
+qmidiarp/stable 0.6.5-3 amd64
+  MIDI arpeggiator for ALSA
+
+squeezelite/stable 1.9.9-1414+git20221121.dbe69eb-1 amd64
+  lightweight headless Squeezebox emulator - ALSA version
+
+tuxguitar-alsa/stable 1.5.6+dfsg1-6 amd64
+  tuxguitar plugin for sound playback using ALSA
+
+volumeicon-alsa/stable 0.5.1+git20170117-1+b2 amd64
+  systray volume icon for alsa
+
+zita-ajbridge/stable 0.8.4-1 amd64
+  alsa to jack bridge
+
+zita-alsa-pcmi-utils/stable 0.6.1-1 amd64
+  Two simple demo programs zita-alsa-pcmi library
+

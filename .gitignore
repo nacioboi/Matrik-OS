@@ -1,2 +1,3 @@
 built/
-tool-chain/
+tool-chain/i686-elf/
+tool-chain/watcom/

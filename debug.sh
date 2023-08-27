@@ -1,3 +1,3 @@
 #!/bin/bash
 
-bochs -qf bochs_config
+bochs -qf bochsrc
